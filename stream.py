@@ -12,7 +12,7 @@ import time
 import argparse
 import atexit
 
-# ── Configuration ──────────────────────────────────────────
+# ── Configuration ────────────────────────────────────────────
 DISPLAY = os.environ.get("STREAM_DISPLAY", ":99")
 WIDTH = os.environ.get("RESOLUTION", "1280x720").split("x")[0]
 HEIGHT = os.environ.get("RESOLUTION", "1280x720").split("x")[1]
@@ -70,15 +70,15 @@ def start_xvfb():
     return p
 
 def start_dashboard():
-    """Launch the dashboard application."""
-    print("[stream] Starting dashboard...")
+    """Launch the EVEZ OS agent POV dashboard."""
+    print("[stream] Starting EVEZ OS dashboard...")
     env = os.environ.copy()
     env["DISPLAY"] = DISPLAY
     env["STREAM_WIDTH"] = WIDTH
     env["STREAM_HEIGHT"] = HEIGHT
 
     p = subprocess.Popen(
-        [sys.executable, "dashboard.py"],
+        [sys.executable, "dashboard_evez.py"],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -91,7 +91,7 @@ def start_dashboard():
         print(f"[stream] ERROR: Dashboard failed to start!\n{stderr}")
         sys.exit(1)
 
-    print("[stream] Dashboard running.")
+    print("[stream] EVEZ OS dashboard running.")
     return p
 
 def start_ffmpeg(preview=False):
@@ -155,9 +155,9 @@ def start_ffmpeg(preview=False):
 
 def monitor(dashboard_proc, ffmpeg_proc):
     """Monitor processes and restart if they crash."""
-    print("[stream] ═══════════════════════════════════════")
-    print("[stream] 🔴 MOLTBOT LIVE — STREAMING")
-    print("[stream] ═══════════════════════════════════════")
+    print("[stream] \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550")
+    print("[stream] \u25cf EVEZ OS LIVE \u2014 STREAMING")
+    print("[stream] \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550")
 
     while True:
         # Check dashboard
@@ -175,7 +175,7 @@ def monitor(dashboard_proc, ffmpeg_proc):
         time.sleep(10)
 
 def main():
-    parser = argparse.ArgumentParser(description="MoltBot Live Stream")
+    parser = argparse.ArgumentParser(description="EVEZ OS Live Stream")
     parser.add_argument("--preview", action="store_true", help="Preview mode (no YouTube stream)")
     parser.add_argument("--no-xvfb", action="store_true", help="Skip Xvfb (use existing display)")
     args = parser.parse_args()
