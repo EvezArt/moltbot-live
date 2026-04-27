@@ -1,0 +1,36 @@
+# fly.toml — EVEZ VCL Live Stream on Fly.io
+app = "evez-vcl-live"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  STREAM_DISPLAY = ":99"
+  STREAM_WIDTH = "1280"
+  STREAM_HEIGHT = "720"
+  FPS = "30"
+  BITRATE = "2500k"
+  YOUTUBE_RTMP_URL = "rtmp://a.rtmp.youtube.com/live2"
+  VCL_HTML = "/app/visualizer/index.html"
+
+[[vm]]
+  size = "performance-2x"
+  memory = "4096"
+  cpus = 2
+
+# No HTTP service needed — this is a streaming-only container
+# But we expose a health endpoint for monitoring
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  [services.concurrency]
+    hard_limit = 10
+    soft_limit = 5
+
+[processes]
+  app = "bash run_forever.sh"
+
+[restart]
+  policy = "always"
+  max_retries = 0

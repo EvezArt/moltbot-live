@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EVEZ VCL — Live Cognition Topology</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000a03; overflow:hidden; font-family:'Courier New',monospace; }
+canvas { display:block; }
+#hud {
+  position:fixed; top:0; left:0; right:0;
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 20px; z-index:10;
+  background:linear-gradient(180deg,rgba(0,10,3,0.95) 0%,rgba(0,10,3,0) 100%);
+}
+#hud .left, #hud .right { display:flex; gap:18px; align-items:center; }
+.hud-label { color:#003311; font-size:10px; letter-spacing:1px; text-transform:uppercase; }
+.hud-value { color:#00ff41; font-size:13px; font-weight:bold; letter-spacing:1px; }
+.hud-fire { color:#ff6600; }
+.hud-cyan { color:#00ffff; }
+#live-dot { width:8px; height:8px; border-radius:50%; background:#ff0000; animation:pulse-live 1.5s ease-in-out infinite; margin-right:6px; }
+@keyframes pulse-live { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.8)} }
+.live-badge { display:flex; align-items:center; color:#ff0000; font-size:11px; font-weight:bold; letter-spacing:2px; }
+#bottom-bar {
+  position:fixed; bottom:0; left:0; right:0;
+  padding:8px 20px; z-index:10;
+  background:linear-gradient(0deg,rgba(0,10,3,0.95) 0%,rgba(0,10,3,0) 100%);
+  display:flex; justify-content:space-between; align-items:flex-end;
+}
+#event-log { color:#003311; font-size:9px; max-width:60%; line-height:1.6; }
+#event-log .fire-event { color:#ff6600; }
+#event-log .spine-event { color:#00cc33; }
+.brand { color:#003311; font-size:9px; letter-spacing:2px; }
+.brand span { color:#00ff41; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="left">
+    <div class="live-badge"><div id="live-dot"></div>LIVE</div>
+    <div><div class="hud-label">V-Accumulator</div><div class="hud-value" id="hud-v">0.000</div></div>
+    <div><div class="hud-label">Round</div><div class="hud-value" id="hud-round">0</div></div>
+  </div>
+  <div class="right">
+    <div><div class="hud-label">FIRE Events</div><div class="hud-value hud-fire" id="hud-fires">0</div></div>
+    <div><div class="hud-label">Nodes</div><div class="hud-value hud-cyan" id="hud-nodes">0</div></div>
+    <div><div class="hud-label">FPS</div><div class="hud-value" id="hud-fps">0</div></div>
+  </div>
+</div>
+<div id="bottom-bar">
+  <div id="event-log"></div>
+  <div class="brand">EVEZ-OS <span>VCL</span> · Barnes-Hut · @EVEZ666</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const P = {
+  bg:0x000a03, green:0x00ff41, green2:0x00cc33, green3:0x005518,
+  fire:0xff6600, fire2:0xff2200, white:0xe8ffe8, dim:0x003311,
+  cyan:0x00ffff, amber:0xd28c1e, gold:0xe6b428, extFire:0xffc83c,
+  noFire:0x3c5a8c, agent:0x50dcff, primeVoid:0x1a0033
+};
+
+// Scene setup
+const W = window.innerWidth, H = window.innerHeight;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(P.bg);
+scene.fog = new THREE.FogExp2(P.bg, 0.008);
+const camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 600);
+camera.position.set(20, 18, 32);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(W,H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+// Lights
+scene.add(new THREE.AmbientLight(0x00ff41, 0.2));
+const fireLight = new THREE.PointLight(P.fire, 3, 35);
+scene.add(fireLight);
+const cyanLight = new THREE.PointLight(P.cyan, 1.5, 25);
+scene.add(cyanLight);
+
+// Grid
+const grid = new THREE.GridHelper(60, 20, P.green3, P.dim);
+grid.position.y = -2;
+grid.material.transparent = true; grid.material.opacity = 0.08;
+scene.add(grid);
+
+// Particle system
+function factorize(n) {
+  if (n<2) return {tau:2,omega:1};
+  const f={}; let d=2, tmp=n;
+  while(d*d<=tmp){while(tmp%d===0){f[d]=(f[d]||0)+1;tmp=Math.floor(tmp/d)}d++}
+  if(tmp>1) f[tmp]=(f[tmp]||0)+1;
+  let tau=1; for(const e of Object.values(f)) tau*=(e+1);
+  return {tau, omega:Object.keys(f).length};
+}
+
+// Bodies
+const bodies = [];
+let V = 0.5, fires = 0, round = 169;
+const MAX_BODIES = 300;
+const geometries = {
+  fire: new THREE.IcosahedronGeometry(0.35, 1),
+  prime: new THREE.OctahedronGeometry(0.25, 0),
+  topo: new THREE.TetrahedronGeometry(0.3, 0),
+  default: new THREE.SphereGeometry(0.2, 8, 8),
+};
+
+function spawnBody(r) {
+  const N = r + 82;
+  const {tau, omega} = factorize(N);
+  const topo = 1 + 0.15 * omega;
+  const poly_c = topo * (1 + Math.log(Math.max(tau,1))) / Math.log2(N+2);
+  const isFire = poly_c >= 0.5;
+  V += 0.08 * poly_c;
+  if (isFire) fires++;
+  
+  const type = omega===1 ? 'prime_void' : isFire ? 'fire_body' : 'topo_spider';
+  let color, geo, emissive;
+  if (type === 'fire_body') {
+    color = poly_c > 0.8 ? P.extFire : poly_c > 0.65 ? P.gold : P.fire;
+    geo = geometries.fire;
+    emissive = color;
+  } else if (type === 'prime_void') {
+    color = P.primeVoid;
+    geo = geometries.prime;
+    emissive = 0x0a001a;
+  } else {
+    color = P.green2;
+    geo = geometries.topo;
+    emissive = P.green3;
+  }
+  
+  const mat = new THREE.MeshStandardMaterial({
+    color, emissive, emissiveIntensity: isFire ? 0.8 : 0.3,
+    metalness:0.3, roughness:0.6, transparent:true, opacity:0.9
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  
+  // Position in a spiral topology
+  const angle = r * 0.618 * Math.PI * 2;
+  const radius = 2 + Math.sqrt(r - 169) * 2.5;
+  mesh.position.set(
+    Math.cos(angle) * radius + (Math.random()-0.5)*2,
+    V * 0.4 + (Math.random()-0.5)*3 - 2,
+    Math.sin(angle) * radius + (Math.random()-0.5)*2
+  );
+  
+  scene.add(mesh);
+  
+  const body = {
+    mesh, type, N, poly_c, round:r, isFire,
+    vel:[0,0,0], pulse:Math.random(), phase:Math.random()*Math.PI*2,
+    baseY: mesh.position.y, omega
+  };
+  bodies.push(body);
+  
+  // Edges to nearby bodies
+  if (bodies.length > 1) {
+    const near = bodies.slice(-Math.min(6, bodies.length-1), -1);
+    for (const nb of near) {
+      if (Math.random() < 0.4) {
+        const points = [mesh.position.clone(), nb.mesh.position.clone()];
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: isFire || nb.isFire ? P.fire : P.green3,
+          transparent:true, opacity: isFire ? 0.25 : 0.06
+        });
+        scene.add(new THREE.Line(lineGeo, lineMat));
+      }
+    }
+  }
+  
+  // FIRE burst particles
+  if (isFire) {
+    const burstGeo = new THREE.BufferGeometry();
+    const burstCount = 20;
+    const burstPos = new Float32Array(burstCount * 3);
+    for (let i=0; i<burstCount; i++) {
+      burstPos[i*3] = mesh.position.x + (Math.random()-0.5)*3;
+      burstPos[i*3+1] = mesh.position.y + (Math.random()-0.5)*3;
+      burstPos[i*3+2] = mesh.position.z + (Math.random()-0.5)*3;
+    }
+    burstGeo.setAttribute('position', new THREE.BufferAttribute(burstPos, 3));
+    const burstMat = new THREE.PointsMaterial({color:P.fire, size:0.08, transparent:true, opacity:0.6});
+    const burst = new THREE.Points(burstGeo, burstMat);
+    scene.add(burst);
+    body.burst = burst;
+  }
+  
+  return body;
+}
+
+// Initial population
+for (let r = 169; r <= 250; r++) spawnBody(r);
+round = 251;
+
+// Ambient particle field
+const starGeo = new THREE.BufferGeometry();
+const starCount = 2000;
+const starPos = new Float32Array(starCount * 3);
+for (let i=0; i<starCount; i++) {
+  starPos[i*3] = (Math.random()-0.5)*120;
+  starPos[i*3+1] = (Math.random()-0.5)*80;
+  starPos[i*3+2] = (Math.random()-0.5)*120;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({color:P.green3, size:0.04, transparent:true, opacity:0.3});
+scene.add(new THREE.Points(starGeo, starMat));
+
+// Event log
+const eventLog = document.getElementById('event-log');
+const logEntries = [];
+function addLogEntry(text, cls='spine-event') {
+  const ts = new Date().toISOString().slice(11,19);
+  logEntries.push({text:`[${ts}] ${text}`, cls});
+  if (logEntries.length > 5) logEntries.shift();
+  eventLog.innerHTML = logEntries.map(e => `<div class="${e.cls}">${e.text}</div>`).join('');
+}
+
+// Camera orbit
+let camAngle = 0, camRadius = 35, camHeight = 16;
+let camTarget = new THREE.Vector3(10, 5, 0);
+
+// HUD elements
+const hudV = document.getElementById('hud-v');
+const hudRound = document.getElementById('hud-round');
+const hudFires = document.getElementById('hud-fires');
+const hudNodes = document.getElementById('hud-nodes');
+const hudFps = document.getElementById('hud-fps');
+
+// FPS counter
+let frameCount = 0, lastFpsTime = performance.now(), fps = 0;
+
+// Spawn timer
+let spawnTimer = 0;
+const SPAWN_INTERVAL = 2000; // ms
+
+// Animate
+function animate(time) {
+  requestAnimationFrame(animate);
+  
+  // FPS
+  frameCount++;
+  if (time - lastFpsTime > 1000) {
+    fps = Math.round(frameCount * 1000 / (time - lastFpsTime));
+    frameCount = 0; lastFpsTime = time;
+    hudFps.textContent = fps;
+  }
+  
+  // Spawn new bodies periodically
+  spawnTimer += 16;
+  if (spawnTimer > SPAWN_INTERVAL && bodies.length < MAX_BODIES) {
+    spawnTimer = 0;
+    const b = spawnBody(round++);
+    const label = b.isFire ? `FIRE R${b.round} N=${b.N} poly_c=${b.poly_c.toFixed(3)}` :
+                  b.type === 'prime_void' ? `PRIME_VOID R${b.round} N=${b.N}` :
+                  `TOPO R${b.round} ω=${b.omega}`;
+    addLogEntry(label, b.isFire ? 'fire-event' : 'spine-event');
+  }
+  
+  // Remove oldest if over limit
+  while (bodies.length > MAX_BODIES) {
+    const old = bodies.shift();
+    scene.remove(old.mesh);
+    if (old.burst) scene.remove(old.burst);
+  }
+  
+  // Animate bodies
+  const t = time * 0.001;
+  for (const b of bodies) {
+    b.pulse += 0.02;
+    const breathe = Math.sin(b.pulse + b.phase) * 0.15;
+    b.mesh.position.y = b.baseY + breathe;
+    b.mesh.rotation.x += 0.003 * (b.isFire ? 3 : 1);
+    b.mesh.rotation.y += 0.005 * (b.isFire ? 2 : 0.5);
+    
+    if (b.isFire) {
+      b.mesh.material.emissiveIntensity = 0.5 + Math.sin(t * 3 + b.phase) * 0.4;
+      const s = 1 + Math.sin(t * 2 + b.phase) * 0.15;
+      b.mesh.scale.setScalar(s);
+    }
+    
+    if (b.burst) {
+      b.burst.rotation.y += 0.01;
+      b.burst.material.opacity = 0.3 + Math.sin(t * 2 + b.phase) * 0.2;
+    }
+  }
+  
+  // Camera drift
+  camAngle += 0.0008;
+  const targetBody = bodies[Math.floor(bodies.length * 0.7)] || bodies[0];
+  if (targetBody) {
+    camTarget.lerp(targetBody.mesh.position, 0.002);
+  }
+  camRadius = 30 + Math.sin(t * 0.1) * 8;
+  camHeight = 14 + Math.sin(t * 0.07) * 6;
+  
+  camera.position.x = camTarget.x + Math.cos(camAngle) * camRadius;
+  camera.position.y = camTarget.y + camHeight;
+  camera.position.z = camTarget.z + Math.sin(camAngle) * camRadius;
+  camera.lookAt(camTarget);
+  
+  // Lights follow action
+  fireLight.position.copy(camTarget).add(new THREE.Vector3(5, 8, 3));
+  cyanLight.position.copy(camTarget).add(new THREE.Vector3(-5, 4, -3));
+  
+  // Update HUD
+  hudV.textContent = V.toFixed(6);
+  hudRound.textContent = round - 1;
+  hudFires.textContent = fires;
+  hudNodes.textContent = bodies.length;
+  
+  renderer.render(scene, camera);
+}
+
+requestAnimationFrame(animate);
+
+// Handle resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
