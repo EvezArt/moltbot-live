@@ -3,7 +3,7 @@ app = "evez-vcl-live"
 primary_region = "sjc"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "Dockerfile.vcl"
 
 [env]
   STREAM_DISPLAY = ":99"
@@ -16,17 +16,11 @@ primary_region = "sjc"
 
 [[vm]]
   size = "performance-2x"
-  memory = "4096"
+  memory = 4096
   cpus = 2
 
-# No HTTP service needed — this is a streaming-only container
-# But we expose a health endpoint for monitoring
-[[services]]
-  internal_port = 8080
-  protocol = "tcp"
-  [services.concurrency]
-    hard_limit = 10
-    soft_limit = 5
+# No HTTP service — streaming-only container
+# Health check via internal process monitoring
 
 [processes]
   app = "bash run_forever.sh"
