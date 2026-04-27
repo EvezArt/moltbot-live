@@ -7,8 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-dejavu-core \
     fonts-liberation \
+    fonts-noto-color-emoji \
     x11-utils \
     procps \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -29,11 +31,11 @@ ENV STREAM_HEIGHT=720
 ENV FPS=30
 ENV BITRATE=2500k
 ENV VCL_HTML=/app/visualizer/index.html
+ENV MOLTBOT_CMD="python stream_vcl.py"
 
-# Health check — all 3 processes must be running
+# Health check — Xvfb + ffmpeg must be running
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD pgrep -f ffmpeg > /dev/null && pgrep -f chromium > /dev/null
+    CMD pgrep -f ffmpeg > /dev/null && pgrep -f Xvfb > /dev/null
 
 # Run with auto-restart wrapper
-ENV MOLTBOT_CMD="python stream_vcl.py"
 CMD ["bash", "run_forever.sh"]
