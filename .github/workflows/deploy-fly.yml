@@ -1,0 +1,38 @@
+name: Deploy EVEZ VCL Stream to Fly.io
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'visualizer/**'
+      - 'stream_vcl.py'
+      - 'Dockerfile.vcl'
+      - 'fly.toml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare Docker context
+        run: |
+          # Rename Dockerfile.vcl for the build
+          cp Dockerfile.vcl Dockerfile.deploy
+          mkdir -p visualizer
+          # Ensure visualizer is in place
+          ls -la visualizer/
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy \
+            --dockerfile Dockerfile.vcl \
+            --remote-only \
+            --strategy immediate \
+            --env YOUTUBE_STREAM_KEY=${{ secrets.YOUTUBE_STREAM_KEY }}
