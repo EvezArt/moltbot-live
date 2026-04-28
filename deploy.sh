@@ -1,75 +1,49 @@
-#!/bin/bash
-# MoltBot Live — One-Command VPS Deployment
-# Usage: curl -sSL https://raw.githubusercontent.com/EvezArt/moltbot-live/main/deploy.sh | bash
-set -e
+#!/usr/bin/env bash
+# EVEZ VCL Live — One-Shot Deploy Bootstrap
+# Run: curl -sSL https://raw.githubusercontent.com/EvezArt/moltbot-live/main/deploy.sh | bash
+# Or: bash deploy.sh
+# Handles: Fly auth, app creation, secrets, deploy — everything.
+set -euo pipefail
 
-echo "═══════════════════════════════════════════"
-echo "  🦞 MoltBot Live — VPS Deployment"
-echo "═══════════════════════════════════════════"
-echo ""
+echo "═══════════════════════════════════════════════════"
+echo "  EVEZ VCL Live — Deploy Bootstrap"
+echo "═══════════════════════════════════════════════════"
 
-# Check requirements
-command -v docker >/dev/null 2>&1 || {
-    echo "Installing Docker..."
-    curl -fsSL https://get.docker.com | sh
-    sudo systemctl enable docker
-    sudo systemctl start docker
+# Check deps
+command -v flyctl >/dev/null 2>&1 || {
+  echo "[deploy] Installing flyctl..."
+  curl -L https://fly.io/install.sh | sh
+  export PATH="$HOME/.fly/bin:$PATH"
 }
 
-command -v docker-compose >/dev/null 2>&1 || command -v "docker compose" >/dev/null 2>&1 || {
-    echo "Installing Docker Compose..."
-    sudo apt-get update && sudo apt-get install -y docker-compose-plugin
-}
+# Auth check
+if ! flyctl auth whoami &>/dev/null; then
+  echo "[deploy] Not logged in to Fly.io"
+  echo "[deploy] Opening browser for auth..."
+  flyctl auth login
+fi
 
-# Clone or update repo
-INSTALL_DIR="$HOME/moltbot-live"
-if [ -d "$INSTALL_DIR" ]; then
-    echo "Updating existing installation..."
-    cd "$INSTALL_DIR"
-    git pull
+echo "[deploy] Authenticated as: $(flyctl auth whoami)"
+
+# Create app (idempotent)
+echo "[deploy] Ensuring app exists..."
+flyctl apps create evez-vcl-live --org evez 2>/dev/null && echo "[deploy] App created!" || echo "[deploy] App already exists"
+
+# Set secrets
+if [ -n "${YOUTUBE_STREAM_KEY:-}" ]; then
+  echo "[deploy] Setting YOUTUBE_STREAM_KEY..."
+  echo "$YOUTUBE_STREAM_KEY" | flyctl secrets set YOUTUBE_STREAM_KEY=- --app evez-vcl-live --stage
 else
-    echo "Cloning MoltBot Live..."
-    git clone https://github.com/EvezArt/moltbot-live.git "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
+  echo "[deploy] ⚠️  Set YOUTUBE_STREAM_KEY env var first, or run:"
+  echo "         flyctl secrets set YOUTUBE_STREAM_KEY=<key> --app evez-vcl-live"
 fi
 
-# Configure
-if [ ! -f .env ]; then
-    cp .env.example .env
-    echo ""
-    echo "⚠️  Configure your .env file:"
-    echo "   nano $INSTALL_DIR/.env"
-    echo ""
-    echo "Required:"
-    echo "  YOUTUBE_STREAM_KEY=your-stream-key"
-    echo "  MOLTBOOK_API_KEY=your-api-key"
-    echo ""
-    read -p "Edit .env now? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        ${EDITOR:-nano} .env
-    fi
-fi
-
-# Build and run
-echo ""
-echo "Building container..."
-docker compose build
+# Deploy
+echo "[deploy] Deploying to Fly.io..."
+flyctl deploy --app evez-vcl-live --remote-only --strategy immediate --wait-timeout 120
 
 echo ""
-echo "Starting MoltBot Live..."
-docker compose up -d
-
-echo ""
-echo "═══════════════════════════════════════════"
-echo "  🔴 MoltBot Live is STREAMING"
-echo "═══════════════════════════════════════════"
-echo ""
-echo "Commands:"
-echo "  docker compose logs -f    # View logs"
-echo "  docker compose restart    # Restart stream"
-echo "  docker compose down       # Stop stream"
-echo ""
-echo "Dashboard: Running inside container"
-echo "Stream:    Pushing to YouTube Live"
-echo ""
+echo "═══════════════════════════════════════════════════"
+echo "  ✅ EVEZ VCL Live is deployed and streaming!"
+echo "  Health: https://evez-vcl-live.fly.dev/"
+echo "═══════════════════════════════════════════════════"
