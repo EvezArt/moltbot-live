@@ -13,14 +13,24 @@ primary_region = "sjc"
   BITRATE = "2500k"
   YOUTUBE_RTMP_URL = "rtmp://a.rtmp.youtube.com/live2"
   VCL_HTML = "/app/visualizer/index.html"
+  HEALTH_PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = false
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 20
+    soft_limit = 10
 
 [[vm]]
   size = "performance-2x"
   memory = 4096
   cpus = 2
-
-# No HTTP service — streaming-only container
-# Health check via internal process monitoring
 
 [processes]
   app = "bash run_forever.sh"
@@ -28,3 +38,12 @@ primary_region = "sjc"
 [restart]
   policy = "always"
   max_retries = 0
+
+[checks]
+  [checks.health]
+    type = "http"
+    port = 8080
+    path = "/"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
