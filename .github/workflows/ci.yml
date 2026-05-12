@@ -1,39 +1,20 @@
-name: moltbot-live CI
-
+name: CI Health Check
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
-  workflow_dispatch:
-
+    branches: [main, master]
+  schedule:
+    - cron: '0 6 * * 1'
 jobs:
-  test:
+  health:
     runs-on: ubuntu-latest
-    name: 'Lint + Config Check — 24/7 AI Stream Bot'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install deps
+          python-version: '3.11'
+      - name: Install and check
         run: |
-          pip install pyflakes pytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt --no-deps || true; fi
-      - name: Lint
-        run: pyflakes . --exclude=.git,__pycache__ || true
-      - name: Env template check
-        run: |
-          echo ".env.example keys:"
-          cat .env.example | grep -v '^#' | grep '=' | cut -d= -f1 || echo 'No .env.example'
-      - name: Syntax check
-        run: |
-          python3 -c "
-          import ast, glob
-          files = glob.glob('**/*.py', recursive=True)
-          errors = []
-          for f in files:
-              try: ast.parse(open(f).read())
-              except SyntaxError as e: errors.append(f'{f}: {e}')
-          print('Clean' if not errors else errors)
-          "
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          find . -name '*.py' -not -path './.git/*' -exec python -m py_compile {} \;
